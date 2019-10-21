@@ -45,9 +45,9 @@ func (t *TaipeiExample) HandlePeerFound(pi peer.AddrInfo) {
 	t.mdnsPeers[pi.ID] = pi
 	t.Unlock()
 
-	if err := t.h.Connect(t.ctx, pi); err != nil {
-		fmt.Printf("failed to connect to mDNS peer: %s\n", err)
-	}
+	// if err := t.h.Connect(t.ctx, pi); err != nil {
+	// 	fmt.Printf("failed to connect to mDNS peer: %s\n", err)
+	// }
 }
 
 func (t *TaipeiExample) Run() {
