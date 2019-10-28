@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/protocol"
 
@@ -45,9 +47,7 @@ func (t *TaipeiExample) HandlePeerFound(pi peer.AddrInfo) {
 	t.mdnsPeers[pi.ID] = pi
 	t.Unlock()
 
-	// if err := t.h.Connect(t.ctx, pi); err != nil {
-	// 	fmt.Printf("failed to connect to mDNS peer: %s\n", err)
-	// }
+	t.h.Connect(t.ctx, pi)
 }
 
 func (t *TaipeiExample) Run() {
@@ -68,6 +68,7 @@ func (t *TaipeiExample) Run() {
 		{"Pubsub: Print inbound messages", t.handlePrintInboundMessages},
 		{"Protocol: Initiate chat with peer", t.handleInitiateChat},
 		{"Protocol: Accept incoming chat", t.handleAcceptChat},
+		{"Identify peer", t.handleIdentifyPeer},
 		{"Switch to bootstrap mode", t.handleBootstrapMode},
 	}
 
@@ -86,7 +87,8 @@ func (t *TaipeiExample) Run() {
 		fmt.Println()
 		i, _, err := sel.Run()
 		if err != nil {
-			panic(err)
+			fmt.Println("shutting down")
+			return
 		}
 
 		if err := commands[i].exec(); err != nil {
@@ -401,6 +403,48 @@ func (t *TaipeiExample) handleAcceptChat() error {
 		fmt.Println("no incoming chats")
 	}
 	return nil
+}
+
+func (t *TaipeiExample) handleIdentifyPeer() error {
+	p := promptui.Prompt{Label: "peer id"}
+	id, err := p.Run()
+	if err != nil {
+		return err
+	}
+
+	pid, err := peer.IDB58Decode(id)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(t.ctx, 30*time.Second)
+	defer cancel()
+
+	addrs := t.h.Peerstore().Addrs(pid)
+
+	err = t.h.Connect(ctx, peer.AddrInfo{
+		ID:    pid,
+		Addrs: addrs,
+	})
+	if err != nil {
+		return err
+	}
+
+	conns := t.h.Network().ConnsToPeer(pid)
+	if len(conns) == 0 {
+		return fmt.Errorf("this is not good")
+	}
+	bh := t.h.(*routedhost.RoutedHost)
+	bh.IDService().IdentifyConn(conns[0])
+	<-bh.IDService().IdentifyWait(conns[0])
+
+	protos, err := t.h.Peerstore().GetProtocols(pid)
+	if err != nil {
+		return err
+	}
+	fmt.Println(protos)
+	return nil
+
 }
 
 func handleChat(s network.Stream) error {
